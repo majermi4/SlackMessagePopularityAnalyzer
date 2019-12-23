@@ -13,8 +13,10 @@ import java.nio.file.Path
  */
 object MessagePersister
 {
-    fun storeMessages(channelId : String, messages : List<Message>)
+    fun storeMessages(channel : SlackChannel, messages : List<Message>)
     {
+        val channelId = SlackChannel.getChannelId(channel)
+
         // Serialization
         val fileOutputStream = FileOutputStream(fileNameForChannel(channelId))
         val objectOutputStream = ObjectOutputStream(fileOutputStream)
@@ -26,13 +28,17 @@ object MessagePersister
         fileOutputStream.close()
     }
 
-    fun hasMessages(channelId : String) : Boolean
+    fun hasMessages(channel : SlackChannel) : Boolean
     {
+        val channelId = SlackChannel.getChannelId(channel)
+
         return Files.exists(Path.of(fileNameForChannel(channelId)));
     }
 
-    fun getMessages(channelId : String) : List<Message>
+    fun getMessages(channel : SlackChannel) : List<Message>
     {
+        val channelId = SlackChannel.getChannelId(channel)
+
         // Reading the object from a file
         val fileInputStream = FileInputStream(fileNameForChannel(channelId))
         val objectInputStream = ObjectInputStream(fileInputStream)

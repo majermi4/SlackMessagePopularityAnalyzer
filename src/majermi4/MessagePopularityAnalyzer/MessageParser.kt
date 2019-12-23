@@ -13,19 +13,19 @@ import java.net.URL
  */
 class MessageParser(val authToken: String)
 {
-    fun execute(channelId: String) : List<Message>
+    fun execute(channel: SlackChannel) : List<Message>
     {
-        if (MessagePersister.hasMessages(channelId)) {
-            println("Using cached messages for channel #${SlackChannels.getChannelName(channelId)} ...")
+        if (MessagePersister.hasMessages(channel)) {
+            println("Using cached messages for channel #${SlackChannel.getChannelName(channel)} ...")
 
-            return MessagePersister.getMessages(channelId)
+            return MessagePersister.getMessages(channel)
         }
 
         val parsedMessages = mutableListOf<Message>()
         var nextCursor : String? = null
 
         do {
-            val slackMessagesApiUrl = getMessagesApiUrl(channelId, nextCursor)
+            val slackMessagesApiUrl = getMessagesApiUrl(channel, nextCursor)
 
             try {
                 val channelMessagesRawJson = URL(slackMessagesApiUrl).readText()
@@ -42,7 +42,7 @@ class MessageParser(val authToken: String)
             }
         } while(nextCursor != null)
 
-        MessagePersister.storeMessages(channelId, parsedMessages)
+        MessagePersister.storeMessages(channel, parsedMessages)
 
         return parsedMessages
     }
@@ -100,8 +100,10 @@ class MessageParser(val authToken: String)
         return Message(messageText, parsedReactions, authorId, replyCount, replyUsersCount)
     }
 
-    private fun getMessagesApiUrl(channelId : String, nextCursor: String?): String
+    private fun getMessagesApiUrl(channel : SlackChannel, nextCursor: String?): String
     {
+        val channelId = SlackChannel.getChannelId(channel)
+
         var messagesApiUrl = "https://slack.com/api/conversations.history?token=$authToken&channel=$channelId"
 
         if (nextCursor != null) {
