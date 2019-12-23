@@ -16,7 +16,7 @@ class MessageParser(val authToken: String)
     fun execute(channel: SlackChannel) : List<Message>
     {
         if (MessagePersister.hasMessages(channel)) {
-            println("Using cached messages for channel #${SlackChannel.getChannelName(channel)} ...")
+            println("Using cached messages for channel #${channel.id} ...")
 
             return MessagePersister.getMessages(channel)
         }
@@ -102,9 +102,7 @@ class MessageParser(val authToken: String)
 
     private fun getMessagesApiUrl(channel : SlackChannel, nextCursor: String?): String
     {
-        val channelId = SlackChannel.getChannelId(channel)
-
-        var messagesApiUrl = "https://slack.com/api/conversations.history?token=$authToken&channel=$channelId"
+        var messagesApiUrl = "https://slack.com/api/conversations.history?token=$authToken&channel=${channel.id}"
 
         if (nextCursor != null) {
             messagesApiUrl += "&cursor=$nextCursor"

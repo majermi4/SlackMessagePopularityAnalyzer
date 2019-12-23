@@ -15,10 +15,8 @@ object MessagePersister
 {
     fun storeMessages(channel : SlackChannel, messages : List<Message>)
     {
-        val channelId = SlackChannel.getChannelId(channel)
-
         // Serialization
-        val fileOutputStream = FileOutputStream(fileNameForChannel(channelId))
+        val fileOutputStream = FileOutputStream(fileNameForChannel(channel.id))
         val objectOutputStream = ObjectOutputStream(fileOutputStream)
 
         // Method for serialization of object
@@ -30,17 +28,13 @@ object MessagePersister
 
     fun hasMessages(channel : SlackChannel) : Boolean
     {
-        val channelId = SlackChannel.getChannelId(channel)
-
-        return Files.exists(Path.of(fileNameForChannel(channelId)));
+        return Files.exists(Path.of(fileNameForChannel(channel.id)));
     }
 
     fun getMessages(channel : SlackChannel) : List<Message>
     {
-        val channelId = SlackChannel.getChannelId(channel)
-
         // Reading the object from a file
-        val fileInputStream = FileInputStream(fileNameForChannel(channelId))
+        val fileInputStream = FileInputStream(fileNameForChannel(channel.id))
         val objectInputStream = ObjectInputStream(fileInputStream)
 
         // Method for deserialization of object

@@ -10,8 +10,7 @@ fun main()
 
     val popularMessages = MessageAnalyzer.findPopular(messages, 6)
 
-    val channelName = SlackChannel.getChannelName(channel)
-    println("Done. Analyzed ${messages.count()} messages in #$channelName channel. Found ${popularMessages.count()} popular messages.")
+    println("Done. Analyzed ${messages.count()} messages in #${channel.getName()} channel. Found ${popularMessages.count()} popular messages.")
 
     popularMessages.forEachIndexed { idx, popularMessage ->
         println("Popular message #$idx text: ${popularMessage.text}")
