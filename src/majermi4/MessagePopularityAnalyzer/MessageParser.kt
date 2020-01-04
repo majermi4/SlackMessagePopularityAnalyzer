@@ -1,5 +1,8 @@
 package majermi4.MessagePopularityAnalyzer
 
+import kotlinx.coroutines.GlobalScope
+import kotlinx.coroutines.async
+import kotlinx.coroutines.runBlocking
 import majermi4.MessagePopularityAnalyzer.Model.Message
 import majermi4.MessagePopularityAnalyzer.Model.Reaction
 import org.json.JSONArray
@@ -13,19 +16,63 @@ import java.net.URL
  */
 class MessageParser(val authToken: String)
 {
-    fun execute(channel: SlackChannel) : List<Message>
+    fun parseMessagesFromAllChannels() : MutableList<Message>
+    {
+        // Asynchronously parse messages from all channels
+        val deferred = SlackChannel.values().map {
+            GlobalScope.async {
+                parseMessagesFromChannel(it)
+            }
+        }
+
+        val messages = mutableListOf<Message>()
+        // Combine all messages to a single list
+        runBlocking {
+            deferred.forEach { messages.addAll(it.await()) }
+        }
+
+        // Synchronous version of the above ..
+        // SlackChannel.values().forEach { messages.addAll(parseMessagesFromChannel(it)) }
+
+        return messages
+    }
+
+    fun parseMessagesFromChannel(channel: SlackChannel) : MutableList<Message>
     {
         if (MessagePersister.hasMessages(channel)) {
-            println("Using cached messages for channel #${channel.id} ...")
+            println("Using cached messages for channel #${channel.getName()} ...")
 
             return MessagePersister.getMessages(channel)
         }
 
+        println("Parsing messages for channel #${channel.getName()}")
+
+        val parsedMessages = parseMessagesFromUrl(channel) { getMessagesApiUrl(channel, it) }
+
+        val parsedReplies = mutableListOf<Message>()
+        parsedMessages
+            .filter { it.replyCount > 0 }
+            .forEach { parentMessage ->
+                parsedReplies.addAll(
+                    parseMessagesFromUrl(channel) { getRepliesApiUrl(parentMessage.timestamp, channel, it)}
+                )
+            }
+
+        parsedMessages.addAll(parsedReplies)
+        val distinctParsedMessages = parsedMessages.distinctBy { it.timestamp }.toMutableList()
+
+        MessagePersister.storeMessages(channel, distinctParsedMessages)
+
+        return distinctParsedMessages
+    }
+
+    private fun parseMessagesFromUrl(channel: SlackChannel, getApiUrl: (nextCursor: String?) -> String): MutableList<Message>
+    {
         val parsedMessages = mutableListOf<Message>()
         var nextCursor : String? = null
 
         do {
-            val slackMessagesApiUrl = getMessagesApiUrl(channel, nextCursor)
+            val slackMessagesApiUrl = getApiUrl(nextCursor)
 
             try {
                 val channelMessagesRawJson = URL(slackMessagesApiUrl).readText()
@@ -33,7 +80,7 @@ class MessageParser(val authToken: String)
                 val messagesJsonObject = JSONObject(channelMessagesRawJson);
                 val messagesJsonArray = messagesJsonObject.getJSONArray("messages")
 
-                parsedMessages.addAll(parseMessages(messagesJsonArray))
+                parsedMessages.addAll(parseMessagesFromJson(messagesJsonArray, channel))
 
                 nextCursor = parseNextCursor(messagesJsonObject)
             } catch (e : IOException) {
@@ -41,8 +88,6 @@ class MessageParser(val authToken: String)
                 Util.wait(15)
             }
         } while(nextCursor != null)
-
-        MessagePersister.storeMessages(channel, parsedMessages)
 
         return parsedMessages
     }
@@ -56,13 +101,13 @@ class MessageParser(val authToken: String)
         }
     }
 
-    private fun parseMessages(messagesJsonArray : JSONArray) : List<Message>
+    private fun parseMessagesFromJson(messagesJsonArray: JSONArray, channel: SlackChannel) : List<Message>
     {
         val parsedMessages = mutableListOf<Message>()
 
         for (i in 0 until messagesJsonArray.length()) {
             val messageJsonObject = messagesJsonArray.getJSONObject(i)
-            val parsedMessage = parseMessage(messageJsonObject)
+            val parsedMessage = parseMessageFromJson(messageJsonObject, channel)
 
             parsedMessages.add(parsedMessage)
         }
@@ -70,7 +115,7 @@ class MessageParser(val authToken: String)
         return parsedMessages
     }
 
-    private fun parseMessage(messageJsonObject: JSONObject) : Message
+    private fun parseMessageFromJson(messageJsonObject: JSONObject, channel: SlackChannel) : Message
     {
         val parsedReactions = mutableListOf<Reaction>()
 
@@ -92,12 +137,24 @@ class MessageParser(val authToken: String)
             }
         }
 
+        val messageTimestamp = messageJsonObject.getString("ts");
         val messageText = messageJsonObject.getString("text")
         val authorId = if (messageJsonObject.has("user")) messageJsonObject.getString("user") else null
         val replyCount = if (messageJsonObject.has("reply_count")) messageJsonObject.getInt("reply_count") else 0
         val replyUsersCount = if (messageJsonObject.has("reply_users_count")) messageJsonObject.getInt("reply_users_count") else 0
 
-        return Message(messageText, parsedReactions, authorId, replyCount, replyUsersCount)
+        return Message(messageTimestamp, messageText, parsedReactions, authorId, replyCount, replyUsersCount, channel)
+    }
+
+    private fun getRepliesApiUrl(parentMessageTimestamp: String, channel: SlackChannel, nextCursor: String?): String
+    {
+        var repliesApiUrl = "https://slack.com/api/conversations.replies?token=$authToken&channel=${channel.id}&ts=$parentMessageTimestamp"
+
+        if (nextCursor != null) {
+            repliesApiUrl += "&cursor=$nextCursor"
+        }
+
+        return repliesApiUrl
     }
 
     private fun getMessagesApiUrl(channel : SlackChannel, nextCursor: String?): String
