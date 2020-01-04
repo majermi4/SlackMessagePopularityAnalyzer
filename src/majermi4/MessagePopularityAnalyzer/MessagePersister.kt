@@ -31,7 +31,7 @@ object MessagePersister
         return Files.exists(Path.of(fileNameForChannel(channel.id)));
     }
 
-    fun getMessages(channel : SlackChannel) : List<Message>
+    fun getMessages(channel : SlackChannel) : MutableList<Message>
     {
         // Reading the object from a file
         val fileInputStream = FileInputStream(fileNameForChannel(channel.id))
@@ -39,7 +39,7 @@ object MessagePersister
 
         // Method for deserialization of object
         @Suppress("UNCHECKED_CAST")
-        val messages  = objectInputStream.readObject() as List<Message>
+        val messages  = objectInputStream.readObject() as MutableList<Message>
 
         fileInputStream.close()
         objectInputStream.close()
